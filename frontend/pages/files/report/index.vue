@@ -49,6 +49,7 @@ useHead({
   ]
 })
 
+
 const isLoading = ref(true)
 const route     = useRoute()
 const { public: { apiBase } } = useRuntimeConfig()
@@ -56,15 +57,20 @@ const { public: { apiBase } } = useRuntimeConfig()
 /**
  * Wait until window.Highcharts.chart is ready, then render.
  */
-function createChart(containerId, options) {
-  const tryRender = () => {
-    if (window.Highcharts && typeof window.Highcharts.chart === 'function') {
-      window.Highcharts.chart(containerId, options)
-    } else {
-      setTimeout(tryRender, 50)
-    }
+async function createChart(containerId, options) {
+  // wait until Highcharts.chart exists
+  while (
+    !(
+      window.Highcharts &&
+      typeof window.Highcharts.chart === 'function'
+    )
+  ) {
+    // pause 50 ms
+    /* eslint-disable no-await-in-loop */
+    await new Promise(resolve => setTimeout(resolve, 50));
   }
-  tryRender()
+  // render the chart
+  window.Highcharts.chart(containerId, options);
 }
 
 onMounted(async () => {
@@ -72,14 +78,13 @@ onMounted(async () => {
 
   const fileId = route.query.file_id
   if (!fileId) {
-    alert('Thiếu file_id trong URL (ví dụ ?file_id=8)')
-    isLoading.value = false
-    return
+    alert('Thiếu file_id trong URL (e.g. ?file_id=1)')
+    return navigateTo('/files')
   }
 
   try {
-    const res  = await fetch(`${apiBase}/api/report/token?file_id=${fileId}`)
-    const data = await res.json()
+    const res  = await fetch(`${apiBase}/api/files/${fileId}/rows/`)
+    const rows = await res.json()
     if (!res.ok || data.error) {
       throw new Error(data.error || 'Lỗi từ server')
     }

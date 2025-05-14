@@ -61,19 +61,26 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useFetch, useRuntimeConfig } from '#app'
 
-// Lấy biến môi trường API base
-const config = useRuntimeConfig()
-const apiBaseUrl = config.public.apiBase || 'http://localhost:8000'
+// 1) Grab your public API base from runtimeConfig
+const config      = useRuntimeConfig()
+const apiBaseUrl  = config.public.apiBase || 'http://localhost:8000'
 
-// Lấy danh sách file từ backend
-const { data: filesRaw, refresh } = await useFetch(`${apiBaseUrl}/api/files/`)
+// 2) Fetch the file list using an absolute URL
+const { data: filesRaw, refresh } = await useFetch(
+  `${apiBaseUrl}/api/files/`,
+  { method: 'GET' }
+)
 
-// Xử lý dữ liệu null hoặc không hợp lệ
-const files = computed(() => Array.isArray(filesRaw.value) ? filesRaw.value : [])
+// 3) Normalize to an array
+const files = computed(() =>
+  Array.isArray(filesRaw.value) ? filesRaw.value : []
+)
 
-const selectionMode = ref(false)
-const selectedFileIds = ref([])
+// 4) Selection / delete logic
+const selectionMode    = ref(false)
+const selectedFileIds  = ref([])
 
 const toggleSelectionMode = () => {
   selectionMode.value = !selectionMode.value
@@ -86,22 +93,21 @@ const deleteSelectedFiles = async () => {
   try {
     await $fetch(`${apiBaseUrl}/api/delete-files/`, {
       method: 'DELETE',
-      body: {
-        ids: selectedFileIds.value
-      }
+      body: { ids: selectedFileIds.value }
     })
     alert('Đã xoá thành công!')
     await refresh()
     selectedFileIds.value = []
     selectionMode.value = false
-  } catch (error) {
-    console.error(error)
+  } catch (err) {
+    console.error(err)
     alert('Lỗi khi xoá file.')
   }
 }
 
+// 5) Date formatter helper
 function formatDate(dateString) {
-  const date = new Date(dateString)
-  return date.toLocaleString('vi-VN')
+  return new Date(dateString).toLocaleString('vi-VN')
 }
 </script>
+
