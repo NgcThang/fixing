@@ -1,10 +1,14 @@
-FROM node:18
-
+# Build stage
+FROM node:18-alpine AS builder
 WORKDIR /app
+COPY package*.json ./
+RUN npm ci
 COPY . .
-# Dùng file .env.docker thay cho .env mặc định
-COPY .env.docker .env
+RUN npm run build
 
-RUN npm install
-EXPOSE 3000
-CMD ["npm", "run", "dev"]
+# Run stage
+FROM node:18-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/.output ./.output
+CMD ["node", ".output/server/index.mjs"]

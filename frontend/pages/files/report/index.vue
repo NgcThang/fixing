@@ -37,21 +37,29 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { useRuntimeConfig, useNuxtApp } from '#app'
+import { useHead, useRoute, useRuntimeConfig } from '#app'
+
+// Load Highcharts only on this page via CDN
+useHead({
+  script: [
+    { src: 'https://code.highcharts.com/highcharts.js' },
+    { src: 'https://code.highcharts.com/highcharts-3d.js' },
+    { src: 'https://code.highcharts.com/modules/variable-pie.js' },
+    { src: 'https://code.highcharts.com/modules/heatmap.js' }
+  ]
+})
 
 const isLoading = ref(true)
-const route = useRoute()
+const route     = useRoute()
 const { public: { apiBase } } = useRuntimeConfig()
-const { $highcharts: Highcharts } = useNuxtApp()
 
 /**
- * Waits until Highcharts.chart is ready before rendering.
+ * Wait until window.Highcharts.chart is ready, then render.
  */
 function createChart(containerId, options) {
   const tryRender = () => {
-    if (Highcharts && typeof Highcharts.chart === 'function') {
-      Highcharts.chart(containerId, options)
+    if (window.Highcharts && typeof window.Highcharts.chart === 'function') {
+      window.Highcharts.chart(containerId, options)
     } else {
       setTimeout(tryRender, 50)
     }
@@ -60,7 +68,6 @@ function createChart(containerId, options) {
 }
 
 onMounted(async () => {
-  // Only run on client
   if (process.server) return
 
   const fileId = route.query.file_id
@@ -71,17 +78,17 @@ onMounted(async () => {
   }
 
   try {
-    const res = await fetch(`${apiBase}/api/report/token?file_id=${fileId}`)
+    const res  = await fetch(`${apiBase}/api/report/token?file_id=${fileId}`)
     const data = await res.json()
     if (!res.ok || data.error) {
       throw new Error(data.error || 'Lỗi từ server')
     }
 
-    // Original Reports
+    // ─ Original Reports
     createChart('chart-browser', {
       chart: { type: 'pie' },
       title: { text: '🥧 Trình duyệt phổ biến' },
-      series: [{ name: 'Count', colorByPoint: true, data: data.browsers.map(([n, y]) => ({ name: n, y })) }]
+      series: [{ name: 'Count', colorByPoint: true, data: data.browsers.map(([n,y]) => ({ name: n, y })) }]
     })
     createChart('chart-platform', {
       chart: { type: 'column' },
@@ -94,21 +101,21 @@ onMounted(async () => {
       chart: { type: 'pie', options3d: { enabled: true, alpha: 45 } },
       title: { text: '🥧 Khu vực truy cập (3D)' },
       plotOptions: { pie: { innerSize: 50, depth: 45 } },
-      series: [{ name: 'Count', data: data.regions.map(([n, y]) => ({ name: n, y })) }]
+      series: [{ name: 'Count', data: data.regions.map(([n,y]) => ({ name: n, y })) }]
     })
     createChart('chart-created', {
       chart: { type: 'line' },
       title: { text: '📈 Token tạo theo ngày' },
       xAxis: { categories: data.created_per_day.map(([d]) => d) },
       yAxis: { title: { text: 'Count' } },
-      series: [{ name: 'Tokens', data: data.created_per_day.map(([_, c]) => c) }]
+      series: [{ name: 'Tokens', data: data.created_per_day.map(([_,c]) => c) }]
     })
 
-    // Pie Variants
+    // ─ Pie Variants
     createChart('chart-basic-pie', {
       chart: { type: 'pie' },
       title: { text: '🥧 Basic Pie' },
-      series: [{ data: data.browsers.map(([n, y]) => ({ name: n, y })) }]
+      series: [{ data: data.browsers.map(([n,y]) => ({ name: n, y })) }]
     })
     createChart('chart-donut-pie', {
       chart: { type: 'pie' },
@@ -120,13 +127,13 @@ onMounted(async () => {
       chart: { type: 'pie', options3d: { enabled: true, alpha: 45 } },
       title: { text: '🍕 3D Pie' },
       plotOptions: { pie: { depth: 45 } },
-      series: [{ data: data.regions.map(([n, y]) => ({ name: n, y })) }]
+      series: [{ data: data.regions.map(([n,y]) => ({ name: n, y })) }]
     })
     createChart('chart-semi-pie', {
       chart: { type: 'pie' },
       title: { text: '🥟 Semi-circle Pie' },
-      plotOptions: { pie: { startAngle: -90, endAngle: 90, center: ['50%', '75%'], size: '110%' } },
-      series: [{ data: data.regions.map(([n, y]) => ({ name: n, y })) }]
+      plotOptions: { pie: { startAngle: -90, endAngle: 90, center: ['50%','75%'], size: '110%' } },
+      series: [{ data: data.regions.map(([n,y]) => ({ name: n, y })) }]
     })
     createChart('chart-variable-pie', {
       chart: { type: 'variablepie' },
@@ -136,11 +143,11 @@ onMounted(async () => {
         minPointSize: 10,
         innerSize: '20%',
         zMin: 0,
-        data: data.browsers.map(([n, y]) => ({ name: n, y, z: y }))
+        data: data.browsers.map(([n,y]) => ({ name: n, y, z: y }))
       }]
     })
 
-    // Column / Bar Variants
+    // ─ Column / Bar Variants
     createChart('chart-column-basic', {
       chart: { type: 'column' },
       title: { text: '📦 Column Chart' },
@@ -155,8 +162,8 @@ onMounted(async () => {
       yAxis: { min: 0, title: { text: 'Total' }, stackLabels: { enabled: true } },
       plotOptions: { column: { stacking: 'normal' } },
       series: [
-        { name: 'Mobile', data: data.regions.map(([n, y]) => [n, Math.floor(y * 0.6)]) },
-        { name: 'Desktop', data: data.regions.map(([n, y]) => [n, Math.floor(y * 0.4)]) }
+        { name: 'Mobile',  data: data.regions.map(([n,y]) => [n, Math.floor(y * 0.6)]) },
+        { name: 'Desktop', data: data.regions.map(([n,y]) => [n, Math.floor(y * 0.4)]) }
       ]
     })
     createChart('chart-bar-horizontal', {
@@ -164,10 +171,10 @@ onMounted(async () => {
       title: { text: '📊 Bar Chart' },
       xAxis: { type: 'category' },
       yAxis: { title: { text: 'Count' } },
-      series: [{ data: data.regions.slice(0, 10) }]
+      series: [{ data: data.regions.slice(0,10) }]
     })
 
-    // Time Heatmap demo
+    // ─ Time Heatmap demo
     const heatmapData = []
     for (let day = 0; day < 7; day++) {
       for (let hour = 0; hour < 24; hour++) {
