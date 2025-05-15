@@ -17,19 +17,13 @@
         <h2 class="title">🍊 Pie Chart Variants</h2>
         <div id="chart-basic-pie" class="chart-container"></div>
         <div id="chart-donut-pie" class="chart-container"></div>
-        <div id="chart-3d-pie" class="chart-container"></div>
         <div id="chart-semi-pie" class="chart-container"></div>
-        <div id="chart-variable-pie" class="chart-container"></div>
 
         <!-- Column / Bar Charts -->
         <h2 class="title">🏋️ Column / Bar Charts</h2>
         <div id="chart-column-basic" class="chart-container"></div>
         <div id="chart-column-stacked" class="chart-container"></div>
         <div id="chart-bar-horizontal" class="chart-container"></div>
-
-        <!-- Time Heatmap -->
-        <h2 class="title">📊 Time Heatmap</h2>
-        <div id="chart-heatmap" class="chart-container" style="height:500px;"></div>
       </div>
     </div>
   </section>
@@ -39,13 +33,13 @@
 import { ref, onMounted } from 'vue'
 import { useHead, useRoute, navigateTo, useRuntimeConfig } from '#app'
 
-// 1️⃣ Load Highcharts via CDN on this page only, in document order
+// 1️⃣ Inject Highcharts + modules via CDN
 useHead({
   script: [
-    { src: 'https://code.highcharts.com/highcharts.js',      defer: true },
-    { src: 'https://code.highcharts.com/highcharts-3d.js',    defer: true },
-    { src: 'https://code.highcharts.com/modules/variable-pie.js', defer: true },
-    { src: 'https://code.highcharts.com/modules/heatmap.js',     defer: true }
+    { src: 'https://code.highcharts.com/highcharts.js',            defer: true },
+    { src: 'https://code.highcharts.com/highcharts-3d.js',         defer: true },
+    { src: 'https://code.highcharts.com/modules/variable-pie.js',  defer: true },
+    { src: 'https://code.highcharts.com/modules/heatmap.js',       defer: true }
   ]
 })
 
@@ -53,9 +47,7 @@ const isLoading = ref(true)
 const route     = useRoute()
 const { public: { apiBase } } = useRuntimeConfig()
 
-/**
- * Wait for Highcharts.chart to exist, then render.
- */
+// Poll until Highcharts.chart exists
 async function createChart(containerId, options) {
   while (!(window.Highcharts && typeof window.Highcharts.chart === 'function')) {
     await new Promise(r => setTimeout(r, 50))
@@ -66,27 +58,36 @@ async function createChart(containerId, options) {
 onMounted(async () => {
   if (process.server) return
 
-  // 2️⃣ Guard for missing file_id
+  // 2️⃣ file_id guard
   const fileId = route.query.file_id
   if (!fileId) {
-    alert('Thiếu file_id trong URL (ví dụ: ?file_id=1). Quay về danh sách.')
+    alert('Thiếu file_id (ví dụ ?file_id=1). Quay về danh sách.')
     return navigateTo('/files')
   }
 
   try {
-    // 3️⃣ Fetch the pre-built report JSON
+    // 3️⃣ fetch prebuilt report payload
     const res  = await fetch(`${apiBase}/api/report/token?file_id=${fileId}`)
     const data = await res.json()
     if (!res.ok || data.error) {
-      throw new Error(data.error || 'Lỗi không xác định từ server')
+      throw new Error(data.error || 'Lỗi từ server')
     }
 
-    // 4️⃣ Render every chart exactly as before
+    // ——————————————————————————————————————
+    // ✂️ **MOVED** spinner toggle **before** any createChart() calls:
+    isLoading.value = false
+    // ——————————————————————————————————————
+
+    // 4️⃣ render all charts:
 
     await createChart('chart-browser', {
       chart: { type: 'pie' },
       title: { text: '🥧 Trình duyệt phổ biến' },
-      series: [{ name: 'Count', colorByPoint: true, data: data.browsers.map(([n,y]) => ({ name: n, y })) }]
+      series: [{
+        name: 'Count',
+        colorByPoint: true,
+        data: data.browsers.map(([n,y]) => ({ name: n, y }))
+      }]
     })
 
     await createChart('chart-platform', {
@@ -112,7 +113,7 @@ onMounted(async () => {
       series: [{ name: 'Tokens', data: data.created_per_day.map(([_,c]) => c) }]
     })
 
-    // Pie Variants
+    // Pie variants
     await createChart('chart-basic-pie', {
       chart: { type: 'pie' },
       title: { text: '🥧 Basic Pie' },
@@ -124,13 +125,6 @@ onMounted(async () => {
       title: { text: '🍩 Donut Pie' },
       plotOptions: { pie: { innerSize: '50%' } },
       series: [{ data: data.platforms }]
-    })
-
-    await createChart('chart-3d-pie', {
-      chart: { type: 'pie', options3d: { enabled: true, alpha: 45 } },
-      title: { text: '🍕 3D Pie' },
-      plotOptions: { pie: { depth: 45 } },
-      series: [{ data: data.regions.map(([n,y]) => ({ name: n, y })) }]
     })
 
     await createChart('chart-semi-pie', {
@@ -145,18 +139,6 @@ onMounted(async () => {
         }
       },
       series: [{ data: data.regions.map(([n,y]) => ({ name: n, y })) }]
-    })
-
-    await createChart('chart-variable-pie', {
-      chart: { type: 'variablepie' },
-      title: { text: '📊 Variable Pie' },
-      series: [{
-        name: 'Token',
-        minPointSize: 10,
-        innerSize: '20%',
-        zMin: 0,
-        data: data.browsers.map(([n,y]) => ({ name: n, y, z: y }))
-      }]
     })
 
     // Column / Bar Charts
@@ -175,8 +157,8 @@ onMounted(async () => {
       yAxis: { min: 0, title: { text: 'Total' }, stackLabels: { enabled: true } },
       plotOptions: { column: { stacking: 'normal' } },
       series: [
-        { name: 'Mobile',  data: data.regions.map(([n,y]) => [n, Math.floor(y * 0.6)]) },
-        { name: 'Desktop', data: data.regions.map(([n,y]) => [n, Math.floor(y * 0.4)]) }
+        { name: 'Mobile',  data: data.regions.map(([n,y]) => [n, Math.floor(y*0.6)]) },
+        { name: 'Desktop', data: data.regions.map(([n,y]) => [n, Math.floor(y*0.4)]) }
       ]
     })
 
@@ -188,27 +170,10 @@ onMounted(async () => {
       series: [{ data: data.regions.slice(0,10) }]
     })
 
-    // Time Heatmap
-    const heatmapData = []
-    for (let day = 0; day < 7; day++) {
-      for (let hour = 0; hour < 24; hour++) {
-        heatmapData.push([hour, day, Math.floor(Math.random() * 20)])
-      }
-    }
-    await createChart('chart-heatmap', {
-      chart: { type: 'heatmap' },
-      title: { text: '🗓 Heatmap – Giờ & Ngày (demo)' },
-      xAxis: { categories: [...Array(24).keys()].map(h => `${h}h`) },
-      yAxis: { categories: ['CN','T2','T3','T4','T5','T6','T7'], reversed: true },
-      colorAxis: { min: 0, maxColor: '#7cb5ec' },
-      series: [{ name: 'Usage', borderWidth: 1, data: heatmapData, dataLabels: { enabled: true, color: '#000' } }]
-    })
-
-  } catch (err) {
+  }
+  catch (err) {
     console.error('Chart error:', err)
     alert('Lỗi chart: ' + err.message)
-  } finally {
-    isLoading.value = false
   }
 })
 </script>
